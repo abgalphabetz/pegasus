@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime, date, timedelta
 import re
+from datetime import datetime, date
 
 import scrapy
-from scrapy_splash import SplashRequest
+
+from racing.context import settings
+from racing.context.helper import splash_request, race_date_from_url
+from racing.context.settings import url_template
 
 
 class SmartLinksSpider(scrapy.Spider):
     name = 'smart-links'
-    allowed_domains = ['racing.hkjc.com']
-    url_base = "http://racing.hkjc.com/racing/information"
-    url_template = "http://racing.hkjc.com/racing/information/{0}/Racing/LocalResults.aspx?RaceDate={1}"
-    url_pattern = re.compile(".*RaceDate=(.{10}).*")
+    allowed_domains = [settings.domain]
 
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
@@ -21,7 +21,7 @@ class SmartLinksSpider(scrapy.Spider):
         self.start_date_string = self.start_date.strftime('%Y/%m/%d')
 
     def start_requests(self):
-        yield self._splash_request(SmartLinksSpider.url_template.format(self.lang, self.init_date_string))
+        yield splash_request(url_template.format(self.lang, self.init_date_string))
 
     def parse(self, response):
         # first parse all available race dates
@@ -30,20 +30,11 @@ class SmartLinksSpider(scrapy.Spider):
             for d in dates:
                 race_date = datetime.strptime(d, '%d/%m/%Y').date()
                 if race_date < self.start_date_plus_one_year:
-                    yield self._splash_request(
-                        SmartLinksSpider.url_template.format(self.lang, race_date.strftime('%Y/%m/%d')))
+                    yield splash_request(url_template.format(self.lang, race_date.strftime('%Y/%m/%d')))
         else:
             if not re.search('.*RaceNo=.*', response.url):
-                race_date = self.race_date_from_url(response.url)
+                race_date = race_date_from_url(response.url)
                 yield {race_date: response.url}
                 links = response.css('table.js_racecard tbody tr td a').xpath('@href').re('.*RaceNo=.*')
                 for link in links:
                     yield {race_date: response.urljoin(link)}
-
-    def _splash_request(self, link):
-        return SplashRequest(link, self.parse, endpoint='render.html',
-                             args={'wait': 15, 'html': 1, 'images': 0, 'timeout': 60})
-
-    def race_date_from_url(self, url):
-        m = SmartLinksSpider.url_pattern.match(url)
-        return m.groups()[0]
