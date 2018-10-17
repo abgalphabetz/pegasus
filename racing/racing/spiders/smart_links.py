@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-import re
 from datetime import datetime, date
 
 import scrapy
 
 from racing.context import settings
-from racing.context.helper import splash_request, race_date_from_url
-from racing.context.settings import url_template
+from racing.context.helper import splash_request
+from racing.context.settings import url_template, race_no_url_pattern
 
 
 class SmartLinksSpider(scrapy.Spider):
@@ -32,9 +31,8 @@ class SmartLinksSpider(scrapy.Spider):
                 if race_date < self.start_date_plus_one_year:
                     yield splash_request(url_template.format(self.lang, race_date.strftime('%Y/%m/%d')))
         else:
-            if not re.search('.*RaceNo=.*', response.url):
-                race_date = race_date_from_url(response.url)
-                yield {race_date: response.url}
+            if not race_no_url_pattern.search(response.url):
+                yield {'link': response.url}
                 links = response.css('table.js_racecard tbody tr td a').xpath('@href').re('.*RaceNo=.*')
                 for link in links:
-                    yield {race_date: response.urljoin(link)}
+                    yield {'link': response.urljoin(link)}
