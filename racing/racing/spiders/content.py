@@ -23,7 +23,7 @@ class ContentSpider(scrapy.Spider):
         for file in glob.glob(content_files):
             path_to_file = os.path.join(content_dir, file)
             yield scrapy.Request(f"file://{path_to_file}")
-        # yield scrapy.Request(f"file:///Users/arthur/Workspace/hkjc/content/2015/English-20151022-HV-7.html")
+        # yield scrapy.Request(f"file:///Users/arthur/Workspace/hkjc/content/2015/English-20160228-ST-8.html")
 
     def parse(self, response):
         tables = pd.read_html(response.text, thousands=None)
@@ -71,31 +71,28 @@ class ContentSpider(scrapy.Spider):
         label = ["pool", "winning_combination", "dividend_in_hkd"]
         table.columns = label
 
-        def fix_it(t, i, no_of_rows):
-            for j in no_of_rows:
-                k = i + j
-                d = t.iloc[k].dividend_in_hkd
-                if isinstance(d, (int, float)) and math.isnan(d):
-                    t.at[k, 'dividend_in_hkd'] = t.iloc[k].winning_combination
-                    t.at[k, 'winning_combination'] = t.iloc[k].pool
-                    t.at[k, 'pool'] = t.iloc[i+0].pool
+        def fix_it(t, indice, no_of_rows=1):
+            idx = indice.index
+            last_idx = len(t) - 1
+            for i in idx:
+                if i >= last_idx:
+                    continue
 
-        place_idx = table[table.pool == 'PLACE'].index
-        if not place_idx.empty:
-            fix_it(table, place_idx[0], range(1, 3))
+                for j in range(1, no_of_rows+1):
+                    k = i + j
+                    d = t.iloc[k].dividend_in_hkd
+                    if isinstance(d, (int, float)) and math.isnan(d):
+                        t.at[k, 'dividend_in_hkd'] = t.iloc[k].winning_combination
+                        t.at[k, 'winning_combination'] = t.iloc[k].pool
+                        t.at[k, 'pool'] = t.iloc[i].pool
 
-        quinella_idx = table[table.pool == 'QUINELLA PLACE'].index
-        if not quinella_idx.empty:
-            fix_it(table, quinella_idx[0], range(1, 3))
-
-        triple_idx = table[table.pool == 'TRIPLE'].index
-        if not triple_idx.empty:
-            fix_it(table, triple_idx[0], range(1, 2))
-
-        last_idx = len(table)-1
-        for idx in table[table.pool.notnull() & table.pool.str.contains('DOUBLE')].index:
-            if idx < last_idx:
-                fix_it(table, idx, range(1, 2))
+        fix_it(table, table[table.pool == 'PLACE'], 2)
+        fix_it(table, table[table.pool == 'QUINELLA PLACE'], 2)
+        fix_it(table, table[table.pool == 'TREBLE'])
+        fix_it(table, table[table.pool == 'SIX UP'])
+        fix_it(table, table[table.pool == 'QUARTET'])
+        fix_it(table, table[table.pool.notnull() & table.pool.str.contains('DOUBLE')])
+        fix_it(table, table[table.pool.notnull() & table.pool.str.contains('COMPOSITE WIN')], 6)
 
         dividends = []
         for pool, winning_combination, dividend in table[table.pool.str.contains('COMPOSITE WIN') == False].values:
