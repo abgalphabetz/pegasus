@@ -23,7 +23,7 @@ class ContentSpider(scrapy.Spider):
         for file in glob.glob(content_files):
             path_to_file = os.path.join(content_dir, file)
             yield scrapy.Request(f"file://{path_to_file}")
-        # yield scrapy.Request(f"file:///Users/arthur/Workspace/hkjc/content/2015/English-20160228-ST-8.html")
+        # yield scrapy.Request(f"file:///Users/arthur/Workspace/hkjc/content/2015/English-20151025-ST-2.html")
 
     def parse(self, response):
         tables = pd.read_html(response.text, thousands=None)
@@ -71,28 +71,31 @@ class ContentSpider(scrapy.Spider):
         label = ["pool", "winning_combination", "dividend_in_hkd"]
         table.columns = label
 
-        def fix_it(t, indice, no_of_rows=1):
+        def fix_it(t, indice):
             idx = indice.index
             last_idx = len(t) - 1
             for i in idx:
                 if i >= last_idx:
-                    continue
+                    break
 
-                for j in range(1, no_of_rows+1):
-                    k = i + j
-                    d = t.iloc[k].dividend_in_hkd
-                    if isinstance(d, (int, float)) and math.isnan(d):
-                        t.at[k, 'dividend_in_hkd'] = t.iloc[k].winning_combination
-                        t.at[k, 'winning_combination'] = t.iloc[k].pool
-                        t.at[k, 'pool'] = t.iloc[i].pool
+                for j in range(i+1, last_idx+1):
+                    d = t.iloc[j].dividend_in_hkd
+                    if not (isinstance(d, (int, float)) and math.isnan(d)):
+                        break
 
-        fix_it(table, table[table.pool == 'PLACE'], 2)
-        fix_it(table, table[table.pool == 'QUINELLA PLACE'], 2)
+                    wc = t.iloc[j].winning_combination
+                    current_pool = t.iloc[i].pool
+                    t.at[j, 'dividend_in_hkd'] = wc if 'COMPOSITE WIN' not in current_pool else None
+                    t.at[j, 'winning_combination'] = t.iloc[j].pool
+                    t.at[j, 'pool'] = t.iloc[i].pool
+
+        fix_it(table, table[table.pool == 'PLACE'])
+        fix_it(table, table[table.pool == 'QUINELLA PLACE'])
         fix_it(table, table[table.pool == 'TREBLE'])
         fix_it(table, table[table.pool == 'SIX UP'])
         fix_it(table, table[table.pool == 'QUARTET'])
         fix_it(table, table[table.pool.notnull() & table.pool.str.contains('DOUBLE')])
-        fix_it(table, table[table.pool.notnull() & table.pool.str.contains('COMPOSITE WIN')], 6)
+        fix_it(table, table[table.pool.notnull() & table.pool.str.contains('COMPOSITE WIN')])
 
         dividends = []
         for pool, winning_combination, dividend in table[table.pool.str.contains('COMPOSITE WIN') == False].values:
