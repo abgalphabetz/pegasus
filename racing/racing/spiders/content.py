@@ -71,31 +71,21 @@ class ContentSpider(scrapy.Spider):
         label = ["pool", "winning_combination", "dividend_in_hkd"]
         table.columns = label
 
-        def fix_it(t, indice):
-            idx = indice.index
-            last_idx = len(t) - 1
-            for i in idx:
-                if i >= last_idx:
-                    break
+        def tidy_up(t):
+            size = len(t)
 
-                for j in range(i+1, last_idx+1):
-                    d = t.iloc[j].dividend_in_hkd
-                    if not (isinstance(d, (int, float)) and math.isnan(d)):
-                        break
+            current_pool = None
+            for i in range(0, size):
+                current_row = t.iloc[i]
+                if not (isinstance(current_row.dividend_in_hkd, (int, float)) and math.isnan(current_row.dividend_in_hkd)):
+                    current_pool = current_row.pool
+                    continue
 
-                    wc = t.iloc[j].winning_combination
-                    current_pool = t.iloc[i].pool
-                    t.at[j, 'dividend_in_hkd'] = wc if 'COMPOSITE WIN' not in current_pool else None
-                    t.at[j, 'winning_combination'] = t.iloc[j].pool
-                    t.at[j, 'pool'] = t.iloc[i].pool
+                t.at[i, 'dividend_in_hkd'] = current_row.winning_combination if 'COMPOSITE WIN' not in current_pool else None
+                t.at[i, 'winning_combination'] = current_row.pool
+                t.at[i, 'pool'] = current_pool
 
-        fix_it(table, table[table.pool == 'PLACE'])
-        fix_it(table, table[table.pool == 'QUINELLA PLACE'])
-        fix_it(table, table[table.pool == 'TREBLE'])
-        fix_it(table, table[table.pool == 'SIX UP'])
-        fix_it(table, table[table.pool == 'QUARTET'])
-        fix_it(table, table[table.pool.notnull() & table.pool.str.contains('DOUBLE')])
-        fix_it(table, table[table.pool.notnull() & table.pool.str.contains('COMPOSITE WIN')])
+        tidy_up(table)
 
         dividends = []
         for pool, winning_combination, dividend in table[table.pool.str.contains('COMPOSITE WIN') == False].values:
