@@ -29,8 +29,8 @@ class ContentSpider(scrapy.Spider):
         tables = pd.read_html(response.text, thousands=None)
         metainfo = self.try_read(f"metainfo - {response.url}", self.read_race_and_course_meta_data, tables[1])
         dividend = self.try_read(f"dividend - {response.url}", self.read_dividend, tables[3])
-        # yield {'link': f'{response.url}', 'dividend': dividend}
-        yield {'link': f'{response.url}', 'metainfo': metainfo, 'dividend': dividend}
+        result = self.try_read(f"result - {response.url}", self.read_result, tables[2])
+        yield {'link': f'{response.url}', 'metainfo': metainfo, 'dividend': dividend, 'result': result}
 
     @staticmethod
     def try_read(description, func, *args):
@@ -81,18 +81,17 @@ class ContentSpider(scrapy.Spider):
                     current_pool = current_row.pool
                     continue
 
-                t.at[i, 'dividend_in_hkd'] = current_row.winning_combination if 'COMPOSITE WIN' not in current_pool else None
-                t.at[i, 'winning_combination'] = current_row.pool
-                t.at[i, 'pool'] = current_pool
+                t.at[i, label[2]] = current_row.winning_combination if 'COMPOSITE WIN' not in current_pool else None
+                t.at[i, label[1]] = current_row.pool
+                t.at[i, label[0]] = current_pool
 
         tidy_up(table)
 
-        dividends = []
-        for pool, winning_combination, dividend in table[table.pool.str.contains('COMPOSITE WIN') == False].values:
-            dividends.append({
-                label[0]: pool,
-                label[1]: winning_combination,
-                label[2]: dividend
-            })
+        return table[table.pool.str.contains('COMPOSITE WIN') == False].to_dict('records')
 
-        return dividends
+    @staticmethod
+    def read_result(table: pd.DataFrame):
+        label = ["place", "horse_no", "horse", "jockey", "trainer", "actual_weight", "declared_horse_weight", "draw", "lbw", "running_position", "finish_time", "win_odds"]
+        table.columns = label
+
+        return table.to_dict('records')
