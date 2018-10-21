@@ -6,7 +6,6 @@ import os
 
 import pandas as pd
 import scrapy
-from bs4 import BeautifulSoup
 
 from racing.context import settings
 
@@ -20,7 +19,7 @@ class ContentSpider(scrapy.Spider):
         if not year:
             raise ValueError("Year must be provided.")
 
-        content_dir = os.path.join(settings.content_dir, year)
+        content_dir = os.path.join(settings.raw_data_dir, year)
         content_files = os.path.join(content_dir, f"{lang}-*")
         for file in glob.glob(content_files):
             path_to_file = os.path.join(content_dir, file)
@@ -35,7 +34,7 @@ class ContentSpider(scrapy.Spider):
         if self.is_race_canceled(dividend):
             return
 
-        with open(os.path.join(settings.content_dir, 'hrefs'), 'a') as f:
+        with open(settings.hrefs_file, 'a') as f:
             hrefs, jhrefs = [], []
             for a in response.xpath('//table')[2].css('a'):
                 href = {'href': a.css('::attr(href)').extract_first(), 'text': a.css('::text').extract_first().strip()}
