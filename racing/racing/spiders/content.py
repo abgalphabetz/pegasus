@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import glob
+import json
 import math
 import os
 
@@ -34,10 +35,13 @@ class ContentSpider(scrapy.Spider):
         if self.is_race_canceled(dividend):
             return
 
-        hrefs = [
-            {'href': a.css('::attr(href)').extract_first(), 'text': a.css('::text').extract_first().strip()}
-            for a in response.xpath('//table')[2].css('a')
-        ]
+        with open(os.path.join(settings.content_dir, 'hrefs'), 'a') as f:
+            hrefs, jhrefs = [], []
+            for a in response.xpath('//table')[2].css('a'):
+                href = {'href': a.css('::attr(href)').extract_first(), 'text': a.css('::text').extract_first().strip()}
+                jhrefs.append(json.dumps(href))
+                hrefs.append(href)
+            f.write(os.linesep.join(jhrefs))
 
         result = self.try_read(f"result - {response.url}", self.read_result, tables[2])
         yield {'link': f'{response.url}', 'metainfo': metainfo, 'dividend': dividend, 'result': result, 'hrefs': hrefs}
