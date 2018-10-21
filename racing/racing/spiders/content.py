@@ -5,6 +5,7 @@ import os
 
 import pandas as pd
 import scrapy
+from bs4 import BeautifulSoup
 
 from racing.context import settings
 
@@ -23,14 +24,31 @@ class ContentSpider(scrapy.Spider):
         for file in glob.glob(content_files):
             path_to_file = os.path.join(content_dir, file)
             yield scrapy.Request(f"file://{path_to_file}")
-        # yield scrapy.Request(f"file:///Users/arthur/Workspace/hkjc/content/2015/English-20151025-ST-2.html")
+        # yield scrapy.Request(f"file:///Users/arthur/Workspace/hkjc/content/2016/English-20161026-HV-4.html")
 
     def parse(self, response):
         tables = pd.read_html(response.text, thousands=None)
         metainfo = self.try_read(f"metainfo - {response.url}", self.read_race_and_course_meta_data, tables[1])
         dividend = self.try_read(f"dividend - {response.url}", self.read_dividend, tables[3])
+
+        if self.is_race_canceled(dividend):
+            return
+
+        hrefs = [
+            {'href': a.css('::attr(href)').extract_first(), 'text': a.css('::text').extract_first().strip()}
+            for a in response.xpath('//table')[2].css('a')
+        ]
+
         result = self.try_read(f"result - {response.url}", self.read_result, tables[2])
-        yield {'link': f'{response.url}', 'metainfo': metainfo, 'dividend': dividend, 'result': result}
+        yield {'link': f'{response.url}', 'metainfo': metainfo, 'dividend': dividend, 'result': result, 'hrefs': hrefs}
+
+    @staticmethod
+    def is_race_canceled(dividends):
+        for d in filter(lambda x: x['pool'] == 'WIN', dividends):
+            if d["dividend_in_hkd"] == 'REFUND':
+                return True
+
+        return False
 
     @staticmethod
     def try_read(description, func, *args):
@@ -77,7 +95,8 @@ class ContentSpider(scrapy.Spider):
             current_pool = None
             for i in range(0, size):
                 current_row = t.iloc[i]
-                if not (isinstance(current_row.dividend_in_hkd, (int, float)) and math.isnan(current_row.dividend_in_hkd)):
+                if not (isinstance(current_row.dividend_in_hkd, (int, float)) and math.isnan(
+                        current_row.dividend_in_hkd)):
                     current_pool = current_row.pool
                     continue
 
@@ -91,7 +110,8 @@ class ContentSpider(scrapy.Spider):
 
     @staticmethod
     def read_result(table: pd.DataFrame):
-        label = ["place", "horse_no", "horse", "jockey", "trainer", "actual_weight", "declared_horse_weight", "draw", "lbw", "running_position", "finish_time", "win_odds"]
+        label = ["place", "horse_no", "horse", "jockey", "trainer", "actual_weight", "declared_horse_weight", "draw",
+                 "lbw", "running_position", "finish_time", "win_odds"]
         table.columns = label
 
         return table.to_dict('records')
